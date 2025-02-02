@@ -1,0 +1,409 @@
+' {$STAMP BS2}
+' {$PBASIC 2.5}
+
+fing1 VAR Word
+fing2 VAR Word
+fing3 VAR Word
+fing4 VAR Word
+fing5 VAR Word
+
+Butt1 VAR Bit 'add
+Butt2 VAR Bit 'subtract
+Butt3 VAR Bit 'equal
+Butt4 VAR Bit 'next digit
+SafeButt VAR Bit 'Kill Switch
+
+binaryfinger1 VAR Bit 'pinky
+binaryfinger2 VAR Bit 'ring
+binaryfinger3 VAR Bit 'middle
+binaryfinger4 VAR Bit 'index
+binaryfinger5 VAR Bit 'thumb
+
+temp VAR Word
+n CON 10
+counter VAR Nib
+op VAR Nib
+aslnumber VAR Nib
+b VAR Nib
+
+finalmathanswer VAR Word
+finalr VAR Byte
+digi2store VAR Word
+digi1store VAR Word
+diginstore VAR Word
+controlstate VAR Nib
+idx VAR Nib
+controlstate = 1
+op = 1
+digi1store = 0
+diginstore = 0
+digi2store = 0
+counter = 3
+b = 0
+'1 is waiting for first number
+'2 is adding (and waiting for second number)
+'3 is subtracting (and waiting for second number)
+'4 is displaying answer
+'5 is moving onto next digit
+
+DEBUG "starting program"
+
+SEROUT 15, 84, [22, 12] ' Initialize LCD
+PAUSE 5 ' 5 ms delay for clearing display
+
+PAUSE 5 ' 5 ms delay for clearing display
+
+SEROUT 15, 84, [128, "          "]
+SEROUT 15, 84, [148, "          "]
+ '---------------------------------------------------------------------------------------------------------
+  ObtainFingerPos:
+    HIGH 1                                ' charge the cap
+    PAUSE 5                               '   for 1 ms
+    RCTIME 1, 1, fing1                   ' measure RC discharge time
+    IF fing1<500 THEN                    'THRESHOLD CONTROL for finger 1
+      binaryfinger1 = 1
+    ELSE
+      binaryfinger1 = 0
+    ENDIF
+
+    HIGH 2                                ' charge the cap
+    PAUSE 5                               '   for 1 ms
+    RCTIME 2, 1, fing2                   ' measure RC discharge time
+    IF fing2 < 1000 THEN
+      binaryfinger2=1
+    ELSE
+      binaryfinger2 = 0
+    ENDIF
+
+    HIGH 3                                ' charge the cap
+    PAUSE 5                               '   for 1 ms
+    RCTIME 3, 1, fing3                   ' measure RC discharge time
+    IF fing3 < 1000 THEN
+      binaryfinger3 = 1
+    ELSE
+      binaryfinger3 = 0
+    ENDIF
+
+    HIGH 4                                ' charge the cap
+    PAUSE 5                               '   for 1 ms
+    RCTIME 4, 1, fing4                   ' measure RC discharge time
+    IF fing4 < 1000 THEN
+      binaryfinger4 = 1
+    ELSE
+      binaryfinger4 = 0
+    ENDIF
+
+    HIGH 5                                ' charge the cap
+    PAUSE 5                               '   for 1 ms
+    RCTIME 5, 1, fing5                   ' measure RC discharge time
+    IF fing5<3000 THEN
+      binaryfinger5 = 1
+    ELSE
+      binaryfinger5 = 0
+    ENDIF
+
+
+
+    GOTO ObtainButtonStates
+'-------------------------------------------------------------------------------------------------------------------
+  ObtainButtonStates:
+    Butt1 = IN6
+    Butt2 = IN7
+    Butt3 = IN8
+    Butt4 = IN9
+    GOTO ObtainNumber
+'-------------------------------------------------------------------------------------------------------------------
+  ObtainNumber:
+    IF binaryfinger5 = 0 THEN
+      IF binaryfinger2 = 0 THEN
+        aslnumber=5
+      ELSE
+        aslnumber=3
+      ENDIF
+    ELSE
+      IF binaryfinger4 = 0 THEN
+        IF binaryfinger3 = 0 THEN
+          IF binaryfinger2 = 0 THEN
+            IF binaryfinger1 = 0 THEN
+              aslnumber = 4
+            ELSE
+              aslnumber = 6
+            ENDIF
+          ELSE
+            IF binaryfinger1 = 0 THEN
+              aslnumber = 7
+            ELSE
+              aslnumber = 2
+            ENDIF
+          ENDIF
+        ELSE
+          IF binaryfinger2 = 0 THEN
+            aslnumber = 8
+          ELSE
+            aslnumber = 1
+          ENDIF
+
+        ENDIF
+      ELSE
+        IF binaryfinger3 = 0 THEN
+          aslnumber=9
+        ELSE
+          aslnumber=0
+        ENDIF
+      ENDIF
+    ENDIF
+    FOR idx = 1 TO 8
+      PULSOUT 13, 750+(10*aslnumber)
+      PAUSE 20
+    NEXT
+    GOTO StateMachine
+'----------------------------------------------------------------------------------------------------------------------
+'New Constrolstate
+'1 is waiting for first digit of num
+'2 is waiting for next digit of num
+'3 is output
+
+'Butt1 VAR Bit 'add
+'Butt2 VAR Bit 'subtract
+'Butt3 VAR Bit 'equal
+'Butt4 VAR Bit 'next digit
+'controlstate = 1 at default
+
+'operator
+'1 is add
+'2 is subtract
+'3 is multiply
+'4 is divide
+
+  StateMachine:
+    SEROUT 15, 84, [17] ' Initialize LCD
+    IF IN10 = 0 THEN
+      DEBUG "killswitch activated"
+      END
+    ENDIF
+
+'---------------------------------------------------------------
+    IF controlstate = 1 THEN  'We waiting for first digit
+      SEROUT 15, 84, [128+b, " "]
+      PAUSE 100
+      SEROUT 15, 84, [128+b, DEC aslnumber]
+
+      digi1store =  aslnumber
+
+
+      IF Butt1 = 0 THEN 'add
+        SEROUT 15, 84, [132, "+"]
+
+
+
+        op = 1
+
+        PAUSE 1000
+
+        Butt1 = IN6
+        IF Butt1 = 0 THEN
+          SEROUT 15, 84, [132, "*"]
+          op = 3
+        ENDIF
+
+
+        IF counter = 0 THEN
+          diginstore = diginstore + digi1store
+        ELSEIF counter = 1 THEN
+          diginstore = diginstore/10 + digi1store
+        ELSEIF counter = 2 THEN
+          diginstore = diginstore/100 + digi1store
+        ELSEIF counter = 3 THEN
+          diginstore =  digi1store
+
+        ENDIF
+
+        digi1store = diginstore
+        SEROUT 15, 84, [128, DEC digi1store]
+
+        controlstate = 2
+        diginstore = 0
+        digi2store = 0
+        counter = 3
+        b = 0
+
+      ELSEIF Butt2 = 0 THEN 'go to subtract
+
+        SEROUT 15, 84, [132, "-"]
+        op = 2
+        PAUSE 1000
+        Butt2 = IN7
+        IF Butt2 = 0 THEN
+          SEROUT 15, 84, [132, "/"]
+          op = 4
+          digi1store = digi1store
+
+        ENDIF
+
+
+        IF counter = 0 THEN
+          diginstore = diginstore + digi1store
+        ELSEIF counter = 1 THEN
+          diginstore = diginstore/10 + digi1store
+        ELSEIF counter = 2 THEN
+          diginstore = diginstore/100 + digi1store
+        ELSEIF counter = 3 THEN
+          diginstore =  digi1store
+
+        ENDIF
+
+        digi1store = diginstore
+        SEROUT 15, 84, [128, DEC digi1store]
+
+
+
+        controlstate = 2
+        diginstore = 0
+        digi2store = 0
+        counter = 3
+        b = 0
+
+      Butt4 = IN9
+      ELSEIF Butt4 = 0 THEN  'go to next digit
+
+        controlstate = 1
+
+        digi1store = aslnumber
+
+        IF counter >=1 THEN
+          FOR idx = 1 TO counter
+              digi1store =  digi1store*n
+
+
+          NEXT
+        ENDIF
+        IF  b = 3 THEN
+          b = 3
+        ELSE
+          b = b+1
+        ENDIF
+        IF counter = 0 THEN
+          counter = 0
+        ELSE
+          counter = counter -1
+
+        ENDIF
+
+        diginstore = diginstore + digi1store
+
+
+
+      ENDIF
+    '---------------------------------------------------------------
+
+    ELSEIF controlstate = 2 THEN 'is waiting for next digit of num
+        SEROUT 15, 84, [133+b, " "]
+        PAUSE 100
+        SEROUT 15, 84, [133+b, DEC aslnumber]
+        digi2store = aslnumber
+
+      IF Butt3 = 0 THEN
+        controlstate = 3
+
+        IF counter = 0 THEN
+          diginstore = diginstore + digi2store
+        ELSEIF counter = 1 THEN
+          diginstore = diginstore/10 + digi2store
+        ELSEIF counter = 2 THEN
+          diginstore = diginstore/100 + digi2store
+        ELSEIF counter = 3 THEN
+          diginstore = digi2store
+        ENDIF
+
+        digi2store = diginstore
+        SEROUT 15, 84, [133, DEC digi2store]
+      ENDIF
+
+      Butt4 = IN9
+      IF Butt4 = 0 THEN  'go to next digit
+        controlstate = 2
+
+
+        digi2store = aslnumber
+        IF counter >=1 THEN
+          FOR idx = 1 TO counter
+              digi2store =  digi2store*n
+
+          NEXT
+        ENDIF
+        IF  b = 3 THEN
+          b = 3
+        ELSE
+          b = b+1
+        ENDIF
+        IF counter = 0 THEN
+          counter = 0
+        ELSE
+          counter = counter -1
+        ENDIF
+
+        diginstore = diginstore + digi2store
+
+        DEBUG DEC ? diginstore
+
+      ENDIF
+
+    ELSEIF controlstate = 3 THEN
+       DEBUG DEC ? op
+       SEROUT 15, 84, [148, "="]
+       IF op = 1 THEN
+        finalmathanswer = digi1store + digi2store
+        PAUSE 1000
+        SEROUT 15, 84, [149, DEC finalmathanswer]
+       ELSEIF op = 2 THEN
+        finalmathanswer = digi1store - digi2store
+
+        PAUSE 1000
+        IF digi1store >= digi2store THEN
+          SEROUT 15, 84, [149, DEC finalmathanswer]
+        ELSE
+          SEROUT 15, 84, [149, "-"]
+          SEROUT 15, 84, [150, DEC (65535+1 -finalmathanswer)]
+        ENDIF
+       ELSEIF op = 3 THEN
+        finalr = digi1store**digi2store
+        IF finalr = 0 THEN
+          finalmathanswer = digi1store * digi2store
+          SEROUT 15, 84, [149, DEC finalmathanswer]
+        ELSE
+          SEROUT 15, 84, [149, "OVERFLOW"]
+
+        ENDIF
+
+
+
+        SEROUT 15, 84, [149, DEC finalmathanswer]
+      ELSEIF op = 4 THEN
+        finalmathanswer = digi1store / digi2store
+        finalr = digi1store//digi2store
+
+        temp = (finalr*1000)/digi2store
+
+        PAUSE 1000
+        SEROUT 15, 84, [149, DEC finalmathanswer]
+        SEROUT 15, 84, [151, "."]
+        SEROUT 15, 84, [152, DEC temp]
+
+       ENDIF
+       controlstate = 4
+     ELSEIF controlstate = 4 THEN
+        PAUSE 5000
+        SEROUT 15, 84, [128, "          "]
+        SEROUT 15, 84, [148, "          "]
+        controlstate = 1
+        op = 1
+        digi1store = 0
+        diginstore = 0
+        digi2store = 0
+        counter = 3
+        b = 0
+        controlstate = 1
+
+    ENDIF
+
+    GOTO ObtainFingerPos
